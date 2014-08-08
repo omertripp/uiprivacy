@@ -1,0 +1,89 @@
+\documentclass[]{article}
+
+\usepackage{amssymb}
+\usepackage{oz}
+
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+
+%opening
+\title{Briding the Gap between Privacy Enforcement and User Experience}
+\author{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Privacy enforcement has so far been carried out automatically, without user interaction, primarily via information-flow tracking. The question of what (combinations of) values should be treated as private has been addressed in terms of flow between privacy source and sink APIs. From the user's standpoint, this may be disrputive, and there is also the threat of breaking the app's functionality. ...
+\end{abstract}
+
+\section{Analysis}
+
+A transition $\tau = \left\langle \sigma,o/r,\sigma'  \right\rangle$ is a triple consisting of the prestate $\sigma$, the invoked operation $o$ and its respective response $r$, and the poststate $\sigma'$. A trace $t \in \tau^{\star}$ is a sequence of transitions.
+
+We distinguish five special types of transitions in $t$:
+\begin{enumerate}
+	\item Read event ($\in {\cal S}$): A privacy source is invoked.
+	\item Transformation event ($\in {\cal T}$): A value is created that is data dependent on a source value.
+	\item Release event ($\in {\cal R}_o$): Data is sent out of the application.
+	\item Receipt event ($\in {\cal R}_i$): Data from the outside is received by the application.
+	\item Use event ($\in {\cal U}$): A value is consumed by the app (e.g., rendered to the UI).
+\end{enumerate}
+We defer more concrete specification of the events at this point. For now we suffice with an illustration: The user's location is read (${\cal S}$), then converted into a street address (${\cal T}$), which is set on an advertising request. The request is sent to a remote advertising server (${\cal R}_o$), and a response is received (${\cal R}_i$). The response is rendered as a banner (${\cal U}$).
+
+We define a projection transformation, $\pi \colon \tau^{\star} \rightarrow \tau^{\star}$, that accepts as input a sequence of transitions and filters out any transition outside ${\cal S} \cup {\cal T} \cup {\cal R}_{\{ o,i \}} \cup {\cal U}$. Atop the reduced trace $t^{\#} = \pi(t)$, we compute a dependence graph $G^{t^{\#}} = (V,E)$, such that 
+\begin{itemize}
+	\item $V = \{ \tau \in t^{\#} \}$
+	\item $E = \{ \tau \rightarrow \tau' \colon \tau \leadsto \tau' \in G^t \}$
+\end{itemize}
+We shall often refer to $G^{t^{\#}}$ as the \emph{privacy flow graph} or simply as the \emph{flow graph}.
+
+We assume that all paths $u \leadsto v \in G^{t^{\#}}$ match the regular expression
+\begin{quote}
+	${\cal S} \cdot {\cal T}^{\star} \cdot {\cal R}_o \cdot {\cal R}_i \cdot {\cal U}$
+\end{quote}
+That is, sensitive data is read (e.g., the user's location). It then undergoes a series of zero or more transformations (e.g., the latitude is derived from the location). The resulting value is sent to an external party (e.g., an advertising website). The response received by the application then flows into a usage point (e.g., a banner displaying ad content).
+
+Observe that there are two distinct milestones of interest to the user along a given path in $G^{t^{\#}}$: The first is the release point ($\in {\cal R}_o$), which makes the sensitive information available to external observers. The second is the usage point ($\in {\cal U}$), which reflects the role that the sensitive data plays within the overall functionality of the app.
+
+The critical point w.r.t. unauthorized release of private information is the first of the two. Specifying privacy restrictions over usage points thus mandates a means to link the specification back to release points. Moreover, to accurately depict the release and usage to the user, it is essential to capture the correct amount of leaked information. As an example, if the app obtains the user's full location and address, but utilizes only the zipcode for focused advertisizing, then it would be inaccurate to claim that the ad content is based on the user's (full) location. It is based on the zipcode alone.
+
+We address the first question --- of relating between release and usage points --- via offline dynamic analysis of the app. While trace coverage is incomplete in theory, in practice mobile apps typically have a small number of UI states. We also make conservative yet full precise use of the partial information.
+
+Back to the question of how much information flows into a release point, we assume a lattice structure, 
+${\cal L} = \left\langle S,\sqcap,\sqcup,\sqsubseteq,\bot,\top \right\rangle$, that represents the relationships between private data items:
+\begin{itemize}
+	\item $S$ is a finite set of privacy labels, including e.g. ``location'', ``zipcode'', ``IMEI'', ``IMSI'', ``street'', etc.
+	\item $\bot,\top \in S$ are the bottom and top elements, respectively. Intuitively, $\bot$ represents release of only public data, and $\top$ is the dual of releasing all private information.
+	\item $\sqcap$ and $\sqcup$ are the meet and join operators, respectively. A possible example is: $\textnormal{``longitude''} \sqcap \textnormal{``latitude''} = \bot$ and $\textnormal{``longitude''} \sqcup \textnormal{``latitude''} = \textnormal{``location''}$.
+	\item Finally, $\sqsubseteq$ is the partial order over $S$.
+\end{itemize}
+
+Denote the variables declared by the given program as {\sf vars}. Then 
+given flow graph $G^{t^{\#}}=(V,E)$, we define a partial function $\theta \colon {\sf vars} \pfun {\cal L}$, which maps relevant variables to privacy elements representing the value they point to. This is captured by the following standard kill/gen formulation:
+$$
+\theta(v) = \left\{ 
+\begin{array}{l l}
+\emptyset & \textnormal{if $pred(n)=\emptyset$} \\
+\bigsqcup_{p \in pred(n)} (\theta(p) \cup gen(p)) \setminus kill(p) & \textnormal{o/w}
+\end{array} \right.
+$$
+As an example, if the app accesses the zipcode field of an {\tt Address} object via {\tt getter} call
+\begin{quote}
+	 {\tt String pc = address.getPostalCode()}
+\end{quote}
+then data-flow fact ${\tt pc} \mapsto \textnormal{``zipcode''}$ is generated at the respective node based on the presence of data-flow fact ${\tt address} \mapsto \textnormal{``address''}$.
+
+\section{Obfuscation}
+
+To ensure the preservation of the app's functionality (in other words, least degree of intervention for privacy enforcement), we 
+require that the sturcture of private information be respected when applying obfuscation. This is specified more explicitly in the following defintion. 
+
+\begin{definition}[Feasible obfuscation]
+	An obfuscation scheme is considered \emph{feasible} if it respects all the integrity constraints between different private values. As an example, a mock address must be consistent with the mock location. Otherwise, the business logic of the app may break (e.g., if the remote website returns an error response).
+\end{definition}
+
+We achieve feasible obfuscation by encoding the integrity constraints between private values as a symbolic constraint graph. Once a value is fixed for a root node (e.g., the location), the constraints it casts on (transitive) child nodes (e.g., the address) are respected dynamically by searching for matching values.
+
+\end{document}

@@ -32,7 +32,7 @@ We distinguish five special types of transitions in $t$:
 \end{enumerate}
 We defer more concrete specification of the events at this point. For now we suffice with an illustration: The user's location is read (${\cal S}$), then converted into a street address (${\cal T}$), which is set on an advertising request. The request is sent to a remote advertising server (${\cal R}_o$), and a response is received (${\cal R}_i$). The response is rendered as a banner (${\cal U}$).
 
-We define a projection transformation, $\pi \colon \tau^{\star} \rightarrow \tau^{\star}$, that accepts as input a sequence of transitions and filters out any transition outside ${\cal S} \cup {\cal T} \cup {\cal R}_{\{ o,i \}} \cup {\cal U}$. Atop the reduced trace $t^{\#} = \pi(t)$, we compute a dependence graph $G^{t^{\#}} = (V,E)$, such that 
+We define a projection transformation, $\pi \colon \tau^{\star} \rightarrow \tau^{\star}$, that accepts as input a sequence of transitions and filters out any transition outside ${\cal S} \cup {\cal T} \cup {\cal R}_{\{ o,i \}} \cup {\cal U}$. Atop the reduced trace $t^{\#} = \pi(t)$, we compute a dependence graph $G^{t^{\#}} = (V,E)$, such that
 \begin{itemize}
 	\item $V = \{ \tau \in t^{\#} \}$
 	\item $E = \{ \tau \rightarrow \tau' \colon \tau \leadsto \tau' \in G^t \}$
@@ -51,7 +51,7 @@ The critical point w.r.t. unauthorized release of private information is the fir
 
 We address the first question --- of relating between release and usage points --- via offline dynamic analysis of the app. While trace coverage is incomplete in theory, in practice mobile apps typically have a small number of UI states. We also make conservative yet full precise use of the partial information.
 
-Back to the question of how much information flows into a release point, we assume a lattice structure, 
+Back to the question of how much information flows into a release point, we assume a lattice structure,
 ${\cal L} = \left\langle S,\sqcap,\sqcup,\sqsubseteq,\bot,\top \right\rangle$, that represents the relationships between private data items:
 \begin{itemize}
 	\item $S$ is a finite set of privacy labels, including e.g. ``location'', ``zipcode'', ``IMEI'', ``IMSI'', ``street'', etc.
@@ -60,10 +60,10 @@ ${\cal L} = \left\langle S,\sqcap,\sqcup,\sqsubseteq,\bot,\top \right\rangle$, t
 	\item Finally, $\sqsubseteq$ is the partial order over $S$.
 \end{itemize}
 
-Denote the variables declared by the given program as {\sf vars}. Then 
+Denote the variables declared by the given program as {\sf vars}. Then
 given flow graph $G^{t^{\#}}=(V,E)$, we define a partial function $\theta \colon {\sf vars} \pfun {\cal L}$, which maps relevant variables to privacy elements representing the value they point to. This is captured by the following standard kill/gen formulation:
 $$
-\theta(v) = \left\{ 
+\theta(v) = \left\{
 \begin{array}{l l}
 \emptyset & \textnormal{if $pred(n)=\emptyset$} \\
 \bigsqcup_{p \in pred(n)} (\theta(p) \cup gen(p)) \setminus kill(p) & \textnormal{o/w}
@@ -77,13 +77,24 @@ then data-flow fact ${\tt pc} \mapsto \textnormal{``zipcode''}$ is generated at 
 
 \section{Obfuscation}
 
-To ensure the preservation of the app's functionality (in other words, least degree of intervention for privacy enforcement), we 
-require that the sturcture of private information be respected when applying obfuscation. This is specified more explicitly in the following defintion. 
+To ensure the preservation of the app's functionality (in other words, least degree of intervention for privacy enforcement), we
+require that the sturcture of private information be respected when applying obfuscation. This is specified more explicitly in the following defintion.
 
 \begin{definition}[Feasible obfuscation]
 	An obfuscation scheme is considered \emph{feasible} if it respects all the integrity constraints between different private values. As an example, a mock address must be consistent with the mock location. Otherwise, the business logic of the app may break (e.g., if the remote website returns an error response).
 \end{definition}
 
 We achieve feasible obfuscation by encoding the integrity constraints between private values as a symbolic constraint graph. Once a value is fixed for a root node (e.g., the location), the constraints it casts on (transitive) child nodes (e.g., the address) are respected dynamically by searching for matching values.
+
+\section{Assumptions and Limitations}
+
+\begin{itemize}
+\item The layout of the application's widgets remains constant in all different instantiations of that application. This assumption is used to generate persistent and unique identifiers for UI widgets created in a dynamic manner.
+    (The assumption should be backed up by a claim on its validity in the realistic applications that we examined.)
+\item Each receipt event participates in at most one path. That is, no more than one UI widget is rendered using the information received by an application at a specific point. 
+    Moreover, each path contains one release / receipt pair only.
+    (The assumption should, again, be backed up by a claim on its validity in the realistic applications that we examined.)
+\item Tracking the receipt event on its corresponding release event currently relies on a specific design of the advertising service library. As future work, this implementation should be generalized to handle more generic cases, including asynchronous release / receipt events.    
+\end{itemize}
 
 \end{document}
